@@ -97,8 +97,10 @@ def compute_burg_lpc(
 
     for m in range(p):
         # ── Compute Burg reflection coefficient ──────────────────────────
-        numer = -2.0 * np.dot(f[m + 1:], b[m: N - 1])
-        denom =  np.dot(f[m + 1:], f[m + 1:]) + np.dot(b[m: N - 1], b[m: N - 1])
+        # Use relative indexing: after each iteration f and b are shortened
+        # by one element, so f[1:] and b[:-1] always have matching lengths.
+        numer = -2.0 * np.dot(f[1:], b[:-1])
+        denom =  np.dot(f[1:], f[1:]) + np.dot(b[:-1], b[:-1])
 
         if denom < 1e-12:
             # Degenerate frame (silence or near-silence) — stop early
@@ -118,8 +120,8 @@ def compute_burg_lpc(
         lpc = lpc_new
 
         # ── Update error vectors ──────────────────────────────────────────
-        f_new = f[m + 1:] + k_m * b[m: N - 1]
-        b_new = b[m: N - 1] + k_m * f[m + 1:]
+        f_new = f[1:] + k_m * b[:-1]
+        b_new = b[:-1] + k_m * f[1:]
         f = f_new
         b = b_new
 

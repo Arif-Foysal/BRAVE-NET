@@ -242,7 +242,14 @@ def plot_roc_curves(
     for i, (name, res) in enumerate(models_results.items()):
         y_true = np.array(res["y_true"])
         y_prob = np.array(res["y_prob"])
-        auc    = res["metrics"].get("auc_roc", 0.0)
+        if "metrics" in res:
+            auc = res["metrics"].get("auc_roc", 0.0)
+        else:
+            from sklearn.metrics import roc_auc_score as _auc
+            try:
+                auc = _auc(y_true, y_prob)
+            except ValueError:
+                auc = 0.0
 
         fpr, tpr, _ = roc_curve(y_true, y_prob)
         color = colors[i % len(colors)]
@@ -343,9 +350,11 @@ def plot_restoration_comparison(
 # ─── LOSO Results Bar Chart ───────────────────────────────────────────────────
 
 def plot_loso_metric_comparison(
-    models_aggregate: dict[str, dict],
+    models_aggregate: dict[str, dict] = None,
     metric: str = "f1",
     save_path: str | Path | None = None,
+    *,
+    results_dict: dict[str, dict] | None = None,
 ) -> plt.Figure:
     """Bar chart comparing LOSO mean ± std for a given metric across models.
 
@@ -360,9 +369,21 @@ def plot_loso_metric_comparison(
     -------
     fig : Figure
     """
-    names  = list(models_aggregate.keys())
-    means  = [models_aggregate[n].get(metric, {}).get("mean", 0) for n in names]
-    stds   = [models_aggregate[n].get(metric, {}).get("std",  0) for n in names]
+    # Support both positional 'models_aggregate' and keyword 'results_dict'
+    data = models_aggregate if models_aggregate is not None else results_dict
+    if data is None:
+        raise ValueError("Must provide models_aggregate or results_dict")
+    names  = list(data.keys())
+    # Support both nested {metric: {"mean": ..., "std": ...}} and flat {metric: float}
+    means, stds = [], []
+    for n in names:
+        v = data[n].get(metric, 0)
+        if isinstance(v, dict):
+            means.append(v.get("mean", 0))
+            stds.append(v.get("std", 0))
+        else:
+            means.append(float(v))
+            stds.append(0.0)
 
     colors = ["#90CAF9", "#90CAF9", "#90CAF9", "#EF5350"]  # Highlight BRAVE-Net
 

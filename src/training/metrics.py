@@ -221,6 +221,10 @@ def aggregate_loso_results(
     summary: dict[str, dict[str, float]] = {}
 
     for key in all_keys:
+        # Skip non-scalar entries (e.g. y_true, y_pred, y_prob lists)
+        sample_val = per_fold_results[0].get(key)
+        if isinstance(sample_val, (list, np.ndarray)):
+            continue
         vals = np.array([r[key] for r in per_fold_results if not np.isnan(r.get(key, float("nan")))])
         if len(vals) == 0:
             summary[key] = {"mean": float("nan"), "std": float("nan"), "min": float("nan"), "max": float("nan")}

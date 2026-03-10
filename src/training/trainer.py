@@ -341,7 +341,28 @@ def run_loso_cv(
         model = model_builder()
         trainer = Trainer(model, config, device=device, run_name=run_name)
         fold_result = trainer.fit(train_loader, val_loader, train_labels, fold_tag)
-        per_fold_results.append(fold_result["best_val_metrics"])
+
+        # Load best checkpoint and run final evaluation to collect predictions
+        best_ckpt = fold_result.get("checkpoint_path")
+        if best_ckpt and Path(best_ckpt).exists():
+            model.load_state_dict(torch.load(best_ckpt, map_location=device))
+        model.eval()
+        all_labels, all_preds, all_probs = [], [], []
+        with torch.no_grad():
+            for images, labels_batch, _ in val_loader:
+                images = images.to(device, non_blocking=True)
+                logits = model(images)
+                probs  = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
+                preds  = logits.argmax(dim=1).cpu().numpy()
+                all_labels.extend(labels_batch.numpy().tolist())
+                all_preds.extend(preds.tolist())
+                all_probs.extend(probs.tolist())
+
+        fold_metrics = fold_result["best_val_metrics"]
+        fold_metrics["y_true"] = all_labels
+        fold_metrics["y_pred"] = all_preds
+        fold_metrics["y_prob"] = all_probs
+        per_fold_results.append(fold_metrics)
         print(f"  ✓ Fold {test_speaker} | F1={fold_result['best_val_metrics'].get('f1', 0):.4f}")
 
     aggregate = aggregate_loso_results(per_fold_results)
