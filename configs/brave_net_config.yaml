@@ -1,0 +1,114 @@
+# ============================================================
+# BRAVE-Net Configuration File
+# Burg Residual Augmented Vision Transformer
+# for Parkinson's Disease Detection from Dysarthric Speech
+# ============================================================
+
+# ─── Audio ───────────────────────────────────────────────────
+audio:
+  sample_rate: 16000          # Target sample rate (Hz)
+  mono: true                  # Convert to mono
+
+# ─── Burg Linear Prediction ──────────────────────────────────
+burg_lp:
+  lpc_order: 14               # LP order (typical for speech: 10-16)
+  frame_length_ms: 25         # Frame length in milliseconds
+  hop_length_ms: 10           # Hop length in milliseconds
+
+# ─── Signal Restoration ──────────────────────────────────────
+restoration:
+  # PD-relevant frequency bands to amplify in residual
+  tremor_band_hz: [4, 8]      # Glottal tremor modulation (Hz)
+  glottal_band_hz: [100, 300] # Glottal source frequency band (Hz)
+  amplification_alpha: 1.5    # Residual amplification factor
+  residual_weight: 0.4        # Weight of residual in reconstructed signal
+
+# ─── Mel-Spectrogram ─────────────────────────────────────────
+mel_spectrogram:
+  n_mels: 128                 # Number of Mel filter banks
+  n_fft: 1024                 # FFT window size
+  hop_length: 256             # Hop length in samples
+  win_length: 1024            # Window length in samples
+  f_min: 0                    # Minimum frequency (Hz)
+  f_max: 8000                 # Maximum frequency (Hz)
+  power: 2.0                  # Spectrogram power (2 = power, 1 = magnitude)
+  top_db: 80                  # Dynamic range cutoff (dB)
+  image_size: [224, 224]      # Resize to ViT input size [H, W]
+
+# ─── Model Architecture ──────────────────────────────────────
+model:
+  backbone: "vit_base_patch16_224"  # timm model name
+  pretrained: true                  # Use ImageNet-21k weights
+  num_classes: 2                    # PD vs HC
+  dropout_rate: 0.3
+  # Freezing strategy
+  freeze_attention_blocks: true
+  unfreeze_last_n_blocks: 2         # Unfreeze last N transformer encoder blocks
+  # Classification head
+  head_hidden_dim: 256
+
+# ─── Training ────────────────────────────────────────────────
+training:
+  batch_size: 16
+  max_epochs: 100
+  optimizer: "adamw"
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-4
+  scheduler: "cosine"               # cosine annealing
+  warmup_epochs: 5
+  early_stopping_patience: 15
+  mixed_precision: true             # torch.cuda.amp
+  gradient_clip_norm: 1.0
+  seed: 42
+
+# ─── Data Augmentation ───────────────────────────────────────
+augmentation:
+  enabled: true
+  time_stretch_rate: [0.9, 1.1]
+  pitch_shift_semitones: [-2, 2]
+  add_gaussian_noise_snr_db: 20    # Add noise at 20 dB SNR
+  spec_augment:
+    time_mask_param: 20
+    freq_mask_param: 20
+    num_time_masks: 2
+    num_freq_masks: 2
+
+# ─── Cross-Validation ────────────────────────────────────────
+cross_validation:
+  strategy: "leave_one_speaker_out"  # LOSO-CV (mandatory for TORGO)
+  n_folds: 5                         # For non-LOSO experiments
+
+# ─── Evaluation ──────────────────────────────────────────────
+evaluation:
+  bootstrap_n: 1000                  # Bootstrap iterations for 95% CI
+  primary_metric: "f1"               # Metric for model selection
+  metrics: ["accuracy", "sensitivity", "specificity", "f1", "auc_roc", "mcc"]
+
+# ─── Datasets ────────────────────────────────────────────────
+datasets:
+  torgo:
+    root: "data/raw/TORGO"
+    processed: "data/processed/TORGO"
+    speakers:
+      dysarthric: ["F01", "F03", "M01", "M02", "M04", "M05"]
+      control:    ["FC1", "FC2", "FC3", "MC1", "MC2", "MC3", "MC4"]
+    tasks: ["sustained_vowels", "words", "sentences"]  # audio sub-tasks
+
+  mdvr_kcl:
+    root: "data/raw/MDVR-KCL"
+    processed: "data/processed/MDVR-KCL"
+
+# ─── Paths ───────────────────────────────────────────────────
+paths:
+  checkpoints: "checkpoints/"
+  logs: "logs/"
+  results: "results/"
+  figures: "figures/"
+
+# ─── Logging ─────────────────────────────────────────────────
+logging:
+  use_wandb: false           # Set true to enable Weights & Biases
+  wandb_project: "brave-net"
+  wandb_entity: ""
+  log_interval: 10           # Log every N batches
+  save_best_only: true
